@@ -3,7 +3,15 @@
 import cv2
 import numpy as np
 import math
- 
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt
+from datetime import datetime
+
+# Set the date and time for saving images
+timeset = datetime.now()
+timeset = timeset.strftime("%H:%M:%S")
+
 #uses distance formula to calculate distance
 def distance(tuple1, tuple2):
     dist = math.sqrt((math.fabs(tuple2[0]-tuple1[0]))**2+((math.fabs(tuple2[1]-tuple1[1])))**2)
@@ -34,7 +42,7 @@ def findgreen(frame):
     else:
         return (700,700), False
  
-#filters for orange color and returns orange color position.
+#filters for red color and returns red color position.
 def findred(frame):
     maxcontour = None
     red = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -62,36 +70,6 @@ def findred(frame):
     else:
         return (700,700), False
 
-def calculate_triangle(rframe, rcoords, gcoords, return_initial_pos=False):
-    hypotenuse =  distance((gcoords[0],gcoords[1]), (rcoords[0], rcoords[1]))
-    #quantifies the horizontal of the triangle
-    horizontal = distance((gcoords[0], gcoords[1]), (rcoords[0], gcoords[1]))
-    #makes the third-line of the triangle
-    thirdline = distance((rcoords[0], rcoords[1]), (rcoords[0], gcoords[1]))
-    #calculates the angle using trigonometry
-    angle = np.arcsin((thirdline/hypotenuse))* 180/math.pi
-
-    #draws all 3 lines
-    cv2.line(rframe, (gcoords[0], gcoords[1]), (rcoords[0], rcoords[1]), (0, 0, 255), 2)
-    cv2.line(rframe, (gcoords[0], gcoords[1]), (rcoords[0], gcoords[1]), (0, 0, 255), 2)
-    cv2.line(rframe, (rcoords[0], rcoords[1]), (rcoords[0], gcoords[1]), (0,0,255), 2)
-
-        #Allows for calculation until 180 degrees instead of 90
-    if rcoords[1] < gcoords[1] and rcoords[0] > gcoords[0]:
-        cv2.putText(rframe,str(int(angle)), (20, 20), cv2.FONT_HERSHEY_SCRIPT_COMPLEX, 1, (0,0,0), 2)
-    elif rcoords[1] < gcoords[1] and rcoords[0] < gcoords[0]:
-        cv2.putText(rframe, str(int(180 - angle)),(20, 20), cv2.FONT_HERSHEY_SCRIPT_COMPLEX, 1, (0,0,0), 2)
-    elif rcoords[1] > gcoords[1] and rcoords[0] < gcoords[0]:
-        cv2.putText(rframe, str(int(180 + angle)),(20, 20), cv2.FONT_HERSHEY_SCRIPT_COMPLEX, 1, (0,0,0), 2)
-    elif rcoords[1] > gcoords[1] and rcoords[0] > gcoords[0]:
-        cv2.putText(rframe, str(int(360 - angle)),(20, 20), cv2.FONT_HERSHEY_SCRIPT_COMPLEX, 1, (0,0,0), 2)
-
-    if return_initial_pos:
-        cv2.line(rframe, (gcoords[0], gcoords[1]), (rcoords[0], rcoords[1]), (0, 0, 255), 2)
-
-    return hypotenuse, (gcoords[0], gcoords[1]), (rcoords[0], rcoords[1])
-
-
 # Function to find the angle between two vectors
 def dot_angle(v1, v2):
     # vector form v = ((x0, y0), (x1, y1))
@@ -108,59 +86,98 @@ def dot_angle(v1, v2):
     theta = math.acos(cos_theta)
     return theta * 180/math.pi
 
+# Function to check for which quadrant the angle is in, and return the new angle that has been corrected:
+def check_angle(angle, coordr, coordg):
+    new_angle = angle
+    if coordr[0] > coordg[0] and coordr[1] >= coordg[1]:
+        new_angle = 360 - angle
+    elif coordr[0] < coordg[0] and coordr[1] >= coordg[1]:
+        new_angle = 180 + angle
+    elif coordr[0] > coordg[0] and coordr[1] <= coordg[1]:
+        new_angle = 180 - angle
 
-def diff_tuple(tuple1, tuple2, xy):
-    if xy == 0:
-        return int(abs(tuple1[0]- tuple2[0]))
-    elif xy == 1:
-        return int(abs(tuple1[1] - tuple2[1]))
-
+    return new_angle
 
 #capture video
 cap = cv2.VideoCapture("/Users/vincentdegaetano/Documents/VsCodeProjects/PhysicsResearch/ColorImageTestVid.MOV")
-
+# cap = cv2.VideoCapture("PhysicsResearch/ImageColorTestLong.MOV")
 
 _, frame = cap.read()
 (int_grx, int_gry), blogic = findgreen(frame)
 (int_rx, int_ry), ologic = findred(frame)
 
-initial_hyp, initial_green, initial_red = calculate_triangle(frame, (int_grx, int_gry), (int_rx, int_ry), return_initial_pos=True)
 # Create the initial vector for the line to be drawn on the frame
-initial_dx = abs(initial_red[0] - initial_green[0])
-initial_dy = initial_red[1] - initial_green[1]
+initial_dx = int_rx - int_grx
+initial_dy = int_ry - int_gry
 
+# Get the frame rate of the video
+fr = cap.get(cv2.CAP_PROP_FPS)
+print("\n\n" + str(fr) + "\n\n")
+
+# Find the time per frame
+tpf = fr/60
+
+print(f"\n\n {tpf:.2f} \n\n")
+# Empty array to save the angle values in
+angle_list = []
+
+time_count = [] # Empty list for saving the time assocated with the angle
+cur_time = 0
 while(1):
     _, frame = cap.read()
 
     if not _ or frame is None:
-        print("Error: Reached end of video or failed to grab frame.")
+        print("Error: No more frames...")
         break
 
-    fra = frame
-     #get coordinates of each object
-    (greenx, greeny), blogic = findgreen(fra)
-    (redx, redy), rlogic = findred(fra)
-    #draw two circles around the objects (you can change the numbers as you like)
-    cv2.circle(frame, (greenx, greeny), 20, (0, 255, 0), -1)
-    cv2.circle(frame, (redx, redy), 20, (0, 0, 255), -1)
+    #get coordinates of each object
+    (greenx, greeny), blogic = findgreen(frame)
+    (redx, redy), rlogic = findred(frame)
+
+    #draw two circles around the objects
+    cv2.circle(frame, (greenx, greeny), 15, (0, 255, 0), -1)
+    cv2.circle(frame, (redx, redy), 15, (0, 0, 255), -1)
 
     # draw the initial line with offset
-    cv2.line(frame, (greenx, greeny), (greenx - initial_dx, greeny - initial_dy), (0, 0, 0), 2)
+    cv2.line(frame, (greenx, greeny), (greenx + initial_dx, greeny + initial_dy), (0, 0, 0), 2)
     if blogic and rlogic:
-    #quantifies the hypotenuse of the triangle
-        calculate_triangle(fra, (greenx, greeny), (redx, redy))
-        
+
+
+        # Draw the new line for the angle calculation
+        cv2.line(frame, (greenx, greeny), (redx, redy), (0, 0, 170), 2)
+
         # Calculate the angle from the initial vector obtained at the start
-        v1 = ((greenx, greeny), (greenx - initial_dx, greeny + initial_dy))
+        v1 = ((greenx, greeny), (greenx + initial_dx, greeny + initial_dy))
         v2 = ((greenx, greeny), (redx, redy))
-        print(dot_angle(v1, v2))
 
+        # Find the angle between the two lines
+        angle = dot_angle(v1, v2)
 
+        # Append the values to each of the lists
+        angle_list.append(angle)
+        time_count.append(cur_time)
+
+        # For debugging and manually measuring the angle of each frame:
+        print(angle)
+
+    # Update 
     cv2.imshow("feed", frame)
-    cv2.waitKey(0)
-    if cv2.waitKey(40) == 27:
+    cur_time += tpf
+    cv2.waitKey(0) # When present, this stops the video until any key is pressed
+    if cv2.waitKey(40) == 27: # Ends the loop when the escape key is pressed
         break
 
+# Graph the output as angle vs. time
+plt.figure(figsize=(20, 10))
+plt.plot(time_count, angle_list, color="black", marker='o', markersize=5, markerfacecolor='red')
+plt.title('Angle vs Time')
+plt.xlabel('Time, s')
+plt.ylabel('Angle, degree')
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+name = f'/Users/vincentdegaetano/Documents/VsCodeProjects/PhysicsResearch/Image_Saves/AngleGraph_{timeset}.png'
+plt.savefig(name)
 
 cap.release()
 cv2.destroyAllWindows()
