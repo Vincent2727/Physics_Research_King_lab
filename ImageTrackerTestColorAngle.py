@@ -21,9 +21,15 @@ def distance(tuple1, tuple2):
 def findgreen(frame):
     maxcontour = None
     green = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    greenlow = np.array([65, 25, 70])#replace with your HSV Values
-    greenhi = np.array([85, 70, 135])#replace with your HSV Values
-    mask = cv2.inRange(green, greenlow, greenhi)
+    
+    lower_val = np.array([114, 116, 86])
+    upper_val = np.array([128, 186, 142])
+    
+    # UNCOMMENT OUT FOR GREEN
+        # greenlow = np.array([65, 25, 70])#replace with your HSV Values
+        # greenhi = np.array([85, 70, 135])#replace with your HSV Values
+        # mask = cv2.inRange(green, greenlow, greenhi)
+    mask = cv2.inRange(green, lower_val, upper_val)
     res = cv2.bitwise_and(frame, frame, mask=mask)
 
     cnts= cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)[0]
@@ -32,14 +38,16 @@ def findgreen(frame):
  
         #All this stuff about moments and M['m10'] etc.. are just to return center coordinates
         M = cv2.moments(maxcontour)
-        if M['m00'] > 0 and cv2.contourArea(maxcontour) > 100:
+        if M['m00'] > 0 and cv2.contourArea(maxcontour) > 50:
             cx = int(M['m10'] / M['m00'])
             cy = int(M['m01'] / M['m00'])
             return (cx, cy), True
         else:
             #(700,700), arbitrary random values that will conveniently not be displayed on screen
+            print("Error, nothing to detect for the center...")
             return (700,700), False
     else:
+        print("Error, nothing to detect for the center...")
         return (700,700), False
  
 #filters for red color and returns red color position.
@@ -47,27 +55,34 @@ def findred(frame):
     maxcontour = None
     red = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-    lower_red = np.array([0,50,50])
-    upper_red = np.array([2,255,255])
-    mask0 = cv2.inRange(red, lower_red, upper_red)
-    # upper mask (170-180)
-    lower_red = np.array([177,50,50])
-    upper_red = np.array([180,255,255])
-    mask1 = cv2.inRange(red, lower_red, upper_red)
-    # join my masks
-    mask = mask0+mask1  
+    lower_val = np.array([38, 20, 157])
+    upper_val = np.array([46, 77, 177])
+    mask = cv2.inRange(red, lower_val, upper_val    )
+
+    # UNCOMMENT OUT FOR RED COLOR
+        # lower_red = np.array([0,50,50])
+        # upper_red = np.array([2,255,255])
+        # mask0 = cv2.inRange(red, lower_red, upper_red)
+        # # upper mask (170-180)
+        # lower_red = np.array([177,50,50])
+        # upper_red = np.array([180,255,255])
+        # mask1 = cv2.inRange(red, lower_red, upper_red)
+        # # join my masks
+        # mask = mask0+mask1  
     res = cv2.bitwise_and(frame, frame, mask=mask)
     cnts, hir = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     if len(cnts) > 0:
         maxcontour = max(cnts, key = cv2.contourArea)
         M = cv2.moments(maxcontour)
-        if M['m00'] > 0 and cv2.contourArea(maxcontour) > 2000:
+        if M['m00'] > 0 and cv2.contourArea(maxcontour) > 100:
             cx = int(M['m10'] / M['m00'])
             cy = int(M['m01'] / M['m00'])
             return (cx, cy), True
         else:
+            print("Error, nothing to detect for the moving...")
             return (700,700), False
     else:
+        print("Error, nothing to detect for the moving...")
         return (700,700), False
 
 # Function to find the angle between two vectors
@@ -99,8 +114,9 @@ def check_angle(angle, coordr, coordg):
     return new_angle
 
 #capture video
-cap = cv2.VideoCapture("/Users/vincentdegaetano/Documents/VsCodeProjects/PhysicsResearch/ColorImageTestVid.MOV")
+# cap = cv2.VideoCapture("/Users/vincentdegaetano/Documents/VsCodeProjects/PhysicsResearch/ColorImageTestVid.MOV")
 # cap = cv2.VideoCapture("PhysicsResearch/ImageColorTestLong.MOV")
+cap = cv2.VideoCapture("/Users/vincentdegaetano/Documents/VsCodeProjects/PhysicsResearch/LongColorTestStepper.MOV")
 
 _, frame = cap.read()
 (int_grx, int_gry), blogic = findgreen(frame)
@@ -115,7 +131,7 @@ fr = cap.get(cv2.CAP_PROP_FPS)
 print("\n\n" + str(fr) + "\n\n")
 
 # Find the time per frame
-tpf = fr/60
+tpf = 1.0 /fr
 
 print(f"\n\n {tpf:.2f} \n\n")
 # Empty array to save the angle values in
@@ -158,7 +174,8 @@ while(1):
         time_count.append(cur_time)
 
         # For debugging and manually measuring the angle of each frame:
-        print(angle)
+        
+        print(f"The angle is: {angle}, at time {cur_time}")
 
     # Update 
     cv2.imshow("feed", frame)
