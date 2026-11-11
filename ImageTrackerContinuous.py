@@ -1,0 +1,224 @@
+# Heavily inspired by https://botforge.wordpress.com/2016/07/20/live-camera-based-angle-calculator-using-python-and-opencv/
+#import libs
+import cv2
+import numpy as np
+import math
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt
+from datetime import datetime
+
+# Set the date and time for saving images
+timeset = datetime.now()
+timeset = timeset.strftime("%H:%M:%S")
+
+#uses distance formula to calculate distance
+def distance(tuple1, tuple2):
+    dist = math.sqrt((math.fabs(tuple2[0]-tuple1[0]))**2+((math.fabs(tuple2[1]-tuple1[1])))**2)
+    return dist
+ 
+#filters for blue color and returns blue color position.
+def findgreen(frame):
+    maxcontour = None
+    green = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    
+    lower_val = np.array([114, 116, 86])
+    upper_val = np.array([128, 186, 142])
+    
+    # UNCOMMENT OUT FOR GREEN
+        # greenlow = np.array([65, 25, 70])#replace with your HSV Values
+        # greenhi = np.array([85, 70, 135])#replace with your HSV Values
+        # mask = cv2.inRange(green, greenlow, greenhi)
+    mask = cv2.inRange(green, lower_val, upper_val)
+    res = cv2.bitwise_and(frame, frame, mask=mask)
+
+    cnts= cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)[0]
+    if len(cnts) > 0:
+        maxcontour = max(cnts, key = cv2.contourArea)
+ 
+        #All this stuff about moments and M['m10'] etc.. are just to return center coordinates
+        M = cv2.moments(maxcontour)
+        if M['m00'] > 0 and cv2.contourArea(maxcontour) > 50:
+            cx = int(M['m10'] / M['m00'])
+            cy = int(M['m01'] / M['m00'])
+            return (cx, cy), True
+        else:
+            #(700,700), arbitrary random values that will conveniently not be displayed on screen
+            print("Error, nothing to detect for the center...")
+            return (700,700), False
+    else:
+        print("Error, nothing to detect for the center...")
+        return (700,700), False
+ 
+#filters for red color and returns red color position.
+def findred(frame):
+    maxcontour = None
+    red = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+    lower_val = np.array([38, 20, 157])
+    upper_val = np.array([46, 77, 177])
+    mask = cv2.inRange(red, lower_val, upper_val    )
+
+    # UNCOMMENT OUT FOR RED COLOR
+        # lower_red = np.array([0,50,50])
+        # upper_red = np.array([2,255,255])
+        # mask0 = cv2.inRange(red, lower_red, upper_red)
+        # # upper mask (170-180)
+        # lower_red = np.array([177,50,50])
+        # upper_red = np.array([180,255,255])
+        # mask1 = cv2.inRange(red, lower_red, upper_red)
+        # # join my masks
+        # mask = mask0+mask1  
+    res = cv2.bitwise_and(frame, frame, mask=mask)
+    cnts, hir = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    if len(cnts) > 0:
+        maxcontour = max(cnts, key = cv2.contourArea)
+        M = cv2.moments(maxcontour)
+        if M['m00'] > 0 and cv2.contourArea(maxcontour) > 100:
+            cx = int(M['m10'] / M['m00'])
+            cy = int(M['m01'] / M['m00'])
+            return (cx, cy), True
+        else:
+            print("Error, nothing to detect for the moving...")
+            return (700,700), False
+    else:
+        print("Error, nothing to detect for the moving...")
+        return (700,700), False
+
+# Function to find the angle between two vectors
+def dot_angle(v1, v2):
+    # vector form v = ((x0, y0), (x1, y1))
+    # Find the magnitude of the vectors
+    v1_x = (v1[0][0]- v1[1][0])
+    v1_y = (v1[0][1] - v1[1][1])
+    v2_x = (v2[0][0]- v2[1][0])
+    v2_y = (v2[0][1] - v2[1][1])
+    magn_v1 = math.sqrt((v1_x ** 2) + (v1_y ** 2))
+    magn_v2 = math.sqrt((v2_x ** 2) + (v2_y ** 2))
+    # Find the dot product using the formula cos(theta) = (u.v)/(|u||v|)
+    u_dot_v = (v1_x * v2_x) + (v1_y * v2_y)
+    cos_theta = u_dot_v / (magn_v1 * magn_v2)
+    theta = math.acos(cos_theta)
+    theta = theta * 180/math.pi
+
+    return theta
+
+#capture video
+# cap = cv2.VideoCapture("/Users/vincentdegaetano/Documents/VsCodeProjects/PhysicsResearch/ColorImageTestVid.MOV")
+# cap = cv2.VideoCapture("PhysicsResearch/ImageColorTestLong.MOV")
+cap = cv2.VideoCapture("/Users/vincentdegaetano/Documents/VsCodeProjects/PhysicsResearch/LongColorTestStepper.MOV")
+
+_, frame = cap.read()
+(int_grx, int_gry), blogic = findgreen(frame)
+(int_rx, int_ry), ologic = findred(frame)
+
+# Create the initial vector for the line to be drawn on the frame
+initial_dx = int_rx - int_grx
+initial_dy = int_ry - int_gry
+
+# Get the frame rate of the video
+fr = cap.get(cv2.CAP_PROP_FPS)
+print("\n\n" + str(fr) + "\n\n")
+
+# Find the time per frame
+tpf = 1.0 /fr
+
+print(f"\n\n {tpf:.2f} \n\n")
+# Empty array to save the angle values in
+angle_list = []
+
+time_count = [] # Empty list for saving the time assocated with the angle
+cur_time = 0
+
+# Find the initial quadrant that the starting vector is located in
+iv1 = (int_rx, int_ry)
+iv2 = (int_grx, int_gry)
+
+while(1):
+    _, frame = cap.read()
+
+    if not _ or frame is None:
+        print("Error: No more frames...")
+        break
+
+    #get coordinates of each object
+    (greenx, greeny), blogic = findgreen(frame)
+    (redx, redy), rlogic = findred(frame)
+
+    #draw two circles around the objects
+    cv2.circle(frame, (greenx, greeny), 15, (0, 255, 0), -1)
+    cv2.circle(frame, (redx, redy), 15, (0, 0, 255), -1)
+
+    # draw the initial line with offset
+    cv2.line(frame, (greenx, greeny), (greenx + initial_dx, greeny + initial_dy), (0, 0, 0), 2)
+    if blogic and rlogic:
+
+
+        # Draw the new line for the angle calculation
+        cv2.line(frame, (greenx, greeny), (redx, redy), (0, 0, 170), 2)
+
+        # Calculate the angle from the initial vector obtained at the start
+        v1 = ((greenx, greeny), (greenx + initial_dx, greeny + initial_dy))
+        v2 = ((greenx, greeny), (redx, redy))
+
+        # Find the angle between the two lines
+        angle = dot_angle(v1, v2)
+
+        # Append the values to each of the lists
+        angle_list.append(angle)
+        time_count.append(cur_time)
+
+        # For debugging and manually measuring the angle of each frame:
+        
+        print(f"The angle is: {angle}, at time {cur_time}")
+
+    # Update 
+    cv2.imshow("feed", frame)
+    cur_time += tpf
+    # cv2.waitKey(0) # When present, this stops the video until any key is pressed
+    if cv2.waitKey(40) == 27: # Ends the loop when the escape key is pressed
+        break
+
+# make the data continous, similar to the unwrap class in np
+def unwrap(data):
+    counting_down = False
+    adjusted_angles = [data[0]]
+    offset_count = 0
+    new_angle = 0
+    for i in range(1, len(data)):
+
+        # Detemrine if it is counting down or up
+        if not counting_down and data[i] < data[i-1]: # Checks to see if the angle is increasing, and if the previous entry was greater than the current
+            counting_down = True # the angle is now decreasing
+            offset_count += 180
+        elif counting_down and data[i] > data[i-1]: # Check to see if the angle is decreasing and if the previous entry was less than the current
+            counting_down = False # the angle is now increasing
+            offset_count += 180
+
+        # Update the old angle to account for the rotation
+        if counting_down:
+            new_angle = offset_count + (180 - data[i])
+        else:
+            new_angle = offset_count + data[i]
+        # Add the new angle
+        adjusted_angles.append(new_angle)
+
+    total_rev = np.floor(offset_count / 360)
+    return adjusted_angles, total_rev
+
+new_data, total_rot = unwrap(angle_list)
+print(f"Total revolutions: {total_rot}")
+# Graph the output as angle vs. time
+plt.figure(figsize=(20, 10))
+plt.plot(time_count, new_data, color="black", marker='o', markersize=5, markerfacecolor='red')
+plt.title('Angle vs Time')
+plt.xlabel('Time, s')
+plt.ylabel('Angle, degree')
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+name = f'/Users/vincentdegaetano/Documents/VsCodeProjects/PhysicsResearch/Image_Saves/AngleGraphContinous_{timeset}.png'
+plt.savefig(name)
+
+cap.release()
+cv2.destroyAllWindows()
